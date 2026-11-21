@@ -16,7 +16,19 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from django.http import JsonResponse
+from apps.inventory.views import expiring_batches, medicine_batches, medicine_list
 
+def health_check(request):
+    return JsonResponse({"status": "ok", "app": "PharmaWise"})
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("api/health/", health_check),
+    path("api/medicines/", medicine_list, name="medicine-list"),
+    path(
+        "api/medicines/<int:medicine_id>/batches/",
+        medicine_batches,
+        name="medicine-batches",
+    ),
+    path("api/reports/expiring-batches/", expiring_batches, name="expiring-batches"),
 ]

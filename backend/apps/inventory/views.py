@@ -32,6 +32,10 @@ def medicine_list(request):
         "brand_name",
         "strength",
         "dosage_form",
+        "stock_unit",
+        "units_per_box",
+        "unit_sale_price",
+        "box_sale_price",
         "is_active",
         "stock_on_hand",
         "expired_units",
@@ -75,6 +79,7 @@ def expiring_batches(request):
         .values(
             "medicine__sku",
             "medicine__generic_name",
+            "medicine__stock_unit",
             "batch_number",
             "expiry_date",
             "quantity_on_hand",

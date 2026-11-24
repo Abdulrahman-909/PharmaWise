@@ -8,6 +8,10 @@ type Medicine = {
   generic_name: string
   strength: string
   dosage_form: string
+  stock_unit: string
+  units_per_box: number | null
+  unit_sale_price: number | string | null
+  box_sale_price: number | string | null
   stock_on_hand: number
   expired_units: number
   earliest_expiry: string | null
@@ -124,6 +128,10 @@ export default function App() {
               <th scope="col">Generic name</th>
               <th scope="col">Strength</th>
               <th scope="col">Form</th>
+              <th scope="col">Stock unit</th>
+              <th scope="col">Price per unit (AFN)</th>
+              <th scope="col">Units per box</th>
+              <th scope="col">Price per box (AFN)</th>
               <th scope="col">Stock on hand</th>
               <th scope="col">Expired units</th>
               <th scope="col">Unexpired units</th>
@@ -139,6 +147,18 @@ export default function App() {
                 <td>{medicine.generic_name}</td>
                 <td>{medicine.strength}</td>
                 <td>{medicine.dosage_form}</td>
+                <td>{medicine.stock_unit || '—'}</td>
+                <td>
+  {medicine.unit_sale_price != null
+    ? Number(medicine.unit_sale_price).toFixed(2)
+    : '—'}
+</td>
+<td>{medicine.units_per_box ?? '—'}</td>
+<td>
+  {medicine.box_sale_price != null
+    ? Number(medicine.box_sale_price).toFixed(2)
+    : '—'}
+</td>
                 <td>{medicine.stock_on_hand ?? 'Unavailable'}</td>
                 <td>{medicine.expired_units ?? 'Unavailable'}</td>
                 <td>
@@ -149,7 +169,7 @@ export default function App() {
                 <td>{getReorderStatus(medicine)}</td>
                 <td>{medicine.earliest_expiry ?? '—'}</td>
                 <td>
-                  <MedicineBatches medicineId={medicine.id} />
+                <MedicineBatches medicineId={medicine.id} stockUnit={medicine.stock_unit} />
                 </td>
               </tr>
             ))}

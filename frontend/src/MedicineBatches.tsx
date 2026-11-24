@@ -7,7 +7,12 @@ type Batch = {
   quantity_on_hand: number
 }
 
-function BatchList({ medicineId }: { medicineId: number }) {
+type MedicineBatchesProps = {
+  medicineId: number
+  stockUnit: string
+}
+
+function BatchList({ medicineId, stockUnit }: MedicineBatchesProps) {
   const [batches, setBatches] = useState<Batch[]>([])
   const [message, setMessage] = useState('Loading batches…')
 
@@ -24,11 +29,14 @@ function BatchList({ medicineId }: { medicineId: number }) {
         if (response.status === 401 || response.status === 403) {
           throw new Error('Sign in to Django Admin as staff, then reopen the batches.')
         }
+
         if (!response.ok) {
           throw new Error(`Could not load batches (HTTP ${response.status}).`)
         }
 
         const data: { batches: Batch[] } = await response.json()
+        if (controller.signal.aborted) return
+
         setBatches(data.batches)
         setMessage(data.batches.length === 0 ? 'No batches recorded.' : '')
       } catch (error) {
@@ -49,7 +57,7 @@ function BatchList({ medicineId }: { medicineId: number }) {
         <tr>
           <th scope="col">Batch number</th>
           <th scope="col">Expiry date</th>
-          <th scope="col">Quantity</th>
+          <th scope="col">{stockUnit ? `Quantity (${stockUnit})` : 'Quantity'}</th>
         </tr>
       </thead>
       <tbody>
@@ -65,7 +73,7 @@ function BatchList({ medicineId }: { medicineId: number }) {
   )
 }
 
-export default function MedicineBatches({ medicineId }: { medicineId: number }) {
+export default function MedicineBatches({ medicineId, stockUnit }: MedicineBatchesProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -77,7 +85,7 @@ export default function MedicineBatches({ medicineId }: { medicineId: number }) 
       >
         {isOpen ? 'Hide batches' : 'View batches'}
       </button>
-      {isOpen && <BatchList medicineId={medicineId} />}
+      {isOpen && <BatchList medicineId={medicineId} stockUnit={stockUnit} />}
     </>
   )
 }

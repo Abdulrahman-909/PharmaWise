@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 type ExpiringBatch = {
   medicine__sku: string
   medicine__generic_name: string
+  medicine__stock_unit: string
   batch_number: string
   expiry_date: string
   quantity_on_hand: number
@@ -31,11 +32,16 @@ export default function ExpiringBatches() {
         }
 
         const rows: ExpiringBatch[] = await response.json()
+        if (controller.signal.aborted) return
+
         setBatches(rows)
         setMessage(rows.length === 0 ? 'No stocked batches expire in this period.' : '')
       } catch (error) {
         if (controller.signal.aborted) return
-        setMessage(error instanceof Error ? error.message : 'Could not load the expiry report.')
+
+        setMessage(
+          error instanceof Error ? error.message : 'Could not load the expiry report.'
+        )
       }
     }
 
@@ -58,6 +64,7 @@ export default function ExpiringBatches() {
               <th scope="col">Batch number</th>
               <th scope="col">Expiry date</th>
               <th scope="col">Quantity</th>
+              <th scope="col">Stock unit</th>
             </tr>
           </thead>
           <tbody>
@@ -68,6 +75,7 @@ export default function ExpiringBatches() {
                 <td>{batch.batch_number}</td>
                 <td>{batch.expiry_date}</td>
                 <td>{batch.quantity_on_hand}</td>
+                <td>{batch.medicine__stock_unit || '—'}</td>
               </tr>
             ))}
           </tbody>

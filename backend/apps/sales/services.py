@@ -6,11 +6,11 @@ from django.utils import timezone
 
 from apps.inventory.models import PurchaseReceiptLine, StockBatch
 
-from .models import Sale, SaleAllocationCost, SaleBatchAllocation
+from .models import Sale, SaleAllocationCost, SaleBatchAllocation, SaleReturn
 
 
 def record_delivery_costs(allocations, changed_batches):
-    # complete_sale already holds the stock batch locks.
+    # complete_sale holds the stock batch locks while costs are recorded.
     deliveries = list(
         PurchaseReceiptLine.objects.select_for_update(of=("self",))
         .filter(
@@ -28,7 +28,7 @@ def record_delivery_costs(allocations, changed_batches):
         deliveries_by_batch[delivery.batch_id].append(delivery)
         tracked_units[delivery.batch_id] += delivery.remaining_cost_units
 
-    # changed_batches contains balances after the deductions for this sale.
+    # Recover each batch's balance immediately before this sale.
     starting_stock = {
         batch_id: batch.quantity_on_hand
         for batch_id, batch in changed_batches.items()
@@ -52,7 +52,7 @@ def record_delivery_costs(allocations, changed_batches):
         batch_id = allocation.batch_id
         remaining = allocation.quantity
 
-        # Consume stock already on hand when delivery tracking began.
+        # Opening stock was already on hand when delivery tracking began.
         take = min(remaining, older_units[batch_id])
         if take:
             cost_parts.append(
@@ -61,7 +61,7 @@ def record_delivery_costs(allocations, changed_batches):
             older_units[batch_id] -= take
             remaining -= take
 
-        # Within this batch, consume tracked deliveries in posting order.
+        # Consume this batch's tracked deliveries in posting order.
         for delivery in deliveries_by_batch[batch_id]:
             if remaining == 0:
                 break
@@ -84,12 +84,11 @@ def record_delivery_costs(allocations, changed_batches):
             remaining -= take
 
         if remaining:
-            raise ValidationError(
-                "The delivery quantities do not cover this sale."
-            )
+            raise ValidationError("The delivery quantities do not cover this sale.")
 
     PurchaseReceiptLine.objects.bulk_update(
-        used_deliveries.values(), ["remaining_cost_units"]
+        used_deliveries.values(),
+        ["remaining_cost_units"],
     )
     SaleAllocationCost.objects.bulk_create(cost_parts)
 
@@ -107,7 +106,7 @@ def complete_sale(sale_id):
 
     medicine_ids = {line.medicine_id for line in lines}
 
-    # Acquire locks in a consistent order across concurrent checkouts.
+    # Concurrent checkouts acquire batch locks in the same order.
     batches = list(
         StockBatch.objects.select_for_update()
         .filter(
@@ -118,6 +117,7 @@ def complete_sale(sale_id):
         .order_by("pk")
     )
 
+    # Sell from the earliest-expiring batch first.
     batches_by_medicine = defaultdict(list)
     for batch in sorted(batches, key=lambda b: (b.expiry_date, b.batch_number, b.pk)):
         batches_by_medicine[batch.medicine_id].append(batch)
@@ -164,3 +164,29 @@ def complete_sale(sale_id):
 
     sale.completed_at = timezone.now()
     sale.save(update_fields=["completed_at"])
+
+
+@transaction.atomic
+def post_sale_return(return_id):
+    sale_return = SaleReturn.objects.select_for_update().get(pk=return_id)
+
+    if sale_return.posted_at is not None:
+        raise ValidationError("This return is already posted.")
+
+    # All returns for the same sale share this lock. The next cashier checks
+    # the available quantity after the previous cashier's return has committed.
+    sale = Sale.objects.select_for_update().get(pk=sale_return.sale_id)
+    if sale.completed_at is None:
+        raise ValidationError("Only completed sales can have a posted return.")
+
+    lines = list(
+        sale_return.lines.select_related("sale_line", "sale_return").order_by("pk")
+    )
+    if not lines:
+        raise ValidationError("Add at least one return line before posting.")
+
+    for line in lines:
+        line.full_clean()
+
+    sale_return.posted_at = timezone.now()
+    sale_return.save(update_fields=["posted_at"])

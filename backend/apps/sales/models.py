@@ -1,5 +1,5 @@
 from decimal import Decimal
-
+from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -234,3 +234,93 @@ class PaymentCorrection(models.Model):
 
     def __str__(self):
         return f"Correction of {self.amount} AFN for payment #{self.payment_id}"
+class SaleReturn(models.Model):
+    sale = models.ForeignKey(
+        Sale,
+        on_delete=models.PROTECT,
+        related_name="returns",
+        limit_choices_to={"completed_at__isnull": False},
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sale_returns_created",
+    )
+    reason = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    posted_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    @property
+    def status(self):
+        return "Posted" if self.posted_at else "Draft"
+
+    def __str__(self):
+        if self.pk is None:
+            return "New sales return"
+        return f"Return #{self.pk} for sale #{self.sale_id}"
+class SaleReturnLine(models.Model):
+    sale_return = models.ForeignKey(
+        SaleReturn,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    sale_line = models.ForeignKey(
+        SaleLine,
+        on_delete=models.PROTECT,
+        related_name="return_lines",
+    )
+    quantity = models.PositiveIntegerField(
+        "Stock units returned",
+        validators=[MinValueValidator(1)],
+        help_text="Enter the number of strips, bottles, bags, or other stock units.",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sale_return", "sale_line"],
+                name="unique_sale_line_per_return",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="sale_return_line_quantity_positive",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.sale_return_id is None or self.sale_line_id is None:
+            return
+
+        if self.sale_line.sale_id != self.sale_return.sale_id:
+            raise ValidationError({
+                "sale_line": "Choose an item from the original sale."
+            })
+
+        if self.quantity is None or self.quantity < 1:
+            return
+
+        # Only posted returns count toward units already returned.
+        posted_lines = SaleReturnLine.objects.filter(
+            sale_line_id=self.sale_line_id,
+            sale_return__posted_at__isnull=False,
+        ).exclude(pk=self.pk)
+
+        already_returned = posted_lines.aggregate(
+            total=models.Sum("quantity", default=0)
+        )["total"]
+
+        available = self.sale_line.stock_units - already_returned
+        if self.quantity > available:
+            raise ValidationError({
+                "quantity": f"Only {available} stock units remain available to return."
+            })
+
+    def __str__(self):
+        if self.pk is None:
+            return "New return line"
+        return f"Return #{self.sale_return_id} — {self.quantity} stock units"

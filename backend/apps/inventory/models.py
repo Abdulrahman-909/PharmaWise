@@ -9,6 +9,7 @@ class Medicine(models.Model):
     brand_name = models.CharField(max_length=150, blank=True)
     strength = models.CharField(max_length=80)
     dosage_form = models.CharField(max_length=80)
+
     stock_unit = models.CharField(
         max_length=20,
         choices=[
@@ -105,7 +106,9 @@ class PurchaseReceipt(models.Model):
     )
     invoice_number = models.CharField(max_length=80)
     received_on = models.DateField("Date received", default=timezone.localdate)
-    posted_at = models.DateTimeField("Posted at", null=True, blank=True, editable=False)
+    posted_at = models.DateTimeField(
+        "Posted at", null=True, blank=True, editable=False
+    )
 
     class Meta:
         ordering = ["-received_on", "-id"]
@@ -138,12 +141,32 @@ class PurchaseReceiptLine(models.Model):
         "Stock units per box on this delivery",
         validators=[MinValueValidator(1)],
     )
+    purchase_price_per_box = models.DecimalField(
+        "Purchase price per box (AFN)",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Supplier price for one box on this delivery.",
+    )
+    remaining_cost_units = models.PositiveIntegerField(
+        null=True,
+        editable=False,
+        help_text="Stock units from this delivery still available for sale.",
+    )
 
     @property
     def units_received(self):
         if self.boxes_received is None or self.units_per_box is None:
             return None
         return self.boxes_received * self.units_per_box
+
+    @property
+    def line_cost(self):
+        if self.boxes_received is None or self.purchase_price_per_box is None:
+            return None
+        return self.boxes_received * self.purchase_price_per_box
 
     def __str__(self):
         if self.batch_id is None:

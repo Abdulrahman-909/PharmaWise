@@ -1,7 +1,8 @@
-from django.conf import settings
-from django.db import models
-from django.core.validators import MinValueValidator
 from decimal import Decimal
+
+from django.conf import settings
+from django.core.validators import MinValueValidator
+from django.db import models
 
 
 class Sale(models.Model):
@@ -26,6 +27,7 @@ class Sale(models.Model):
     @property
     def status(self):
         return "Completed" if self.completed_at else "Draft"
+
     @property
     def total_due(self):
         if self.pk is None:
@@ -38,6 +40,7 @@ class Sale(models.Model):
 
     def __str__(self):
         return f"Sale #{self.pk}" if self.pk else "New sale"
+
 
 class SaleLine(models.Model):
     class Package(models.TextChoices):
@@ -59,10 +62,10 @@ class SaleLine(models.Model):
         default=0,
         validators=[MinValueValidator(0)],
     )
-
-    # Snapshot the selected package's price and size when it is chosen.
     price_per_package = models.DecimalField(
-        max_digits=12, decimal_places=2, editable=False
+        max_digits=12,
+        decimal_places=2,
+        editable=False,
     )
     units_per_package = models.PositiveIntegerField(editable=False)
 
@@ -74,12 +77,18 @@ class SaleLine(models.Model):
 
     @property
     def line_total(self):
-        if self.quantity is None or self.price_per_package is None or self.discount is None:
+        if (
+            self.quantity is None
+            or self.price_per_package is None
+            or self.discount is None
+        ):
             return None
         return self.quantity * self.price_per_package - self.discount
 
     def __str__(self):
         return f"Sale line #{self.pk}" if self.pk else "New sale line"
+
+
 class SaleBatchAllocation(models.Model):
     sale_line = models.ForeignKey(
         SaleLine,
@@ -110,6 +119,47 @@ class SaleBatchAllocation(models.Model):
 
     def __str__(self):
         return f"Sale line #{self.sale_line_id} — {self.batch} — {self.quantity} units"
+
+
+class SaleAllocationCost(models.Model):
+    allocation = models.ForeignKey(
+        SaleBatchAllocation,
+        on_delete=models.PROTECT,
+        related_name="cost_parts",
+    )
+    receipt_line = models.ForeignKey(
+        "inventory.PurchaseReceiptLine",
+        on_delete=models.PROTECT,
+        related_name="sale_cost_parts",
+        null=True,
+        blank=True,
+    )
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+
+    # Save the delivery's original price and box size for historical reporting.
+    purchase_price_per_box = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        editable=False,
+    )
+    units_per_box = models.PositiveIntegerField(null=True, editable=False)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="sale_cost_quantity_positive",
+            ),
+        ]
+
+    @property
+    def cost_afn(self):
+        if self.purchase_price_per_box is None or not self.units_per_box:
+            return None
+        return self.purchase_price_per_box * self.quantity / self.units_per_box
+
+
 class Customer(models.Model):
     name = models.CharField("Customer name", max_length=150)
     phone = models.CharField("Phone number", max_length=30, db_index=True)
@@ -119,6 +169,8 @@ class Customer(models.Model):
 
     def __str__(self):
         return f"{self.name} — {self.phone}"
+
+
 class Payment(models.Model):
     sale = models.ForeignKey(
         Sale,
@@ -149,6 +201,8 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment for sale #{self.sale_id}: {self.amount} AFN"
+
+
 class PaymentCorrection(models.Model):
     payment = models.ForeignKey(
         Payment,

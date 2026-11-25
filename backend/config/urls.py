@@ -16,8 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from apps.sales.views import daily_sales_report
 from django.http import JsonResponse
 from apps.inventory.views import expiring_batches, medicine_batches, medicine_list
+
 
 def health_check(request):
     return JsonResponse({"status": "ok", "app": "PharmaWise"})
@@ -31,4 +33,9 @@ urlpatterns = [
         name="medicine-batches",
     ),
     path("api/reports/expiring-batches/", expiring_batches, name="expiring-batches"),
+    path(
+        "api/reports/daily-sales/",
+        daily_sales_report,
+        name="daily-sales-report",
+    ),
 ]

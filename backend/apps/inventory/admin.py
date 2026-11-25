@@ -37,8 +37,29 @@ class SupplierAdmin(admin.ModelAdmin):
 class PurchaseReceiptLineInline(admin.TabularInline):
     model = PurchaseReceiptLine
     extra = 0
-    fields = ("batch", "boxes_received", "units_per_box", "units_received")
-    readonly_fields = ("units_received",)
+    fields = (
+        "batch",
+        "boxes_received",
+        "units_per_box",
+        "purchase_price_per_box",
+        "units_received",
+        "line_cost_afn",
+        "unit_cost_afn",
+    )
+    readonly_fields = ("units_received", "line_cost_afn", "unit_cost_afn")
+
+    @admin.display(description="Line cost (AFN)", empty_value="—")
+    def line_cost_afn(self, obj):
+        cost = obj.line_cost
+        return None if cost is None else f"{cost:.2f}"
+
+    @admin.display(description="Cost per stock unit (AFN)", empty_value="—")
+    def unit_cost_afn(self, obj):
+        if obj.purchase_price_per_box is None or not obj.units_per_box:
+            return None
+
+        unit_cost = obj.purchase_price_per_box / obj.units_per_box
+        return f"{unit_cost:.2f}"
 
 
 @admin.register(PurchaseReceipt)
@@ -53,7 +74,6 @@ class PurchaseReceiptAdmin(admin.ModelAdmin):
         queryset = super().get_queryset(request)
         match = request.resolver_match
 
-        # Serialize receipt edits and deletions with posting on PostgreSQL.
         if request.method == "POST" and match and match.url_name in {
             "inventory_purchasereceipt_change",
             "inventory_purchasereceipt_delete",
@@ -109,9 +129,13 @@ class PurchaseReceiptAdmin(admin.ModelAdmin):
                 return
 
             for line in lines:
+                units = line.units_received
                 StockBatch.objects.filter(pk=line.batch_id).update(
-                    quantity_on_hand=F("quantity_on_hand") + line.units_received
+                    quantity_on_hand=F("quantity_on_hand") + units
                 )
+                line.remaining_cost_units = units
+
+            PurchaseReceiptLine.objects.bulk_update(lines, ["remaining_cost_units"])
 
             receipt.posted_at = timezone.now()
             receipt.save(update_fields=["posted_at"])

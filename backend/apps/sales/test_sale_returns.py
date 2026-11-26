@@ -1,11 +1,12 @@
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
 from apps.inventory.models import Medicine
+
+from apps.core.testing import make_org, make_user
 
 from .models import Sale, SaleLine, SaleReturn, SaleReturnLine
 from .services import post_sale_return
@@ -13,12 +14,10 @@ from .services import post_sale_return
 
 class SaleReturnQuantityTest(TestCase):
     def setUp(self):
-        user_model = get_user_model()
-        self.cashier = user_model.objects.create(
-            **{user_model.USERNAME_FIELD: "returncashier@example.com"},
-            is_staff=True,
-        )
+        self.org = make_org()
+        self.cashier = make_user(self.org, role="admin")
         medicine = Medicine.objects.create(
+            organization=self.org,
             sku="TEST-RETURN",
             generic_name="Test medicine",
             strength="500 mg",
@@ -26,6 +25,7 @@ class SaleReturnQuantityTest(TestCase):
             stock_unit="strip",
         )
         self.sale = Sale.objects.create(
+            organization=self.org,
             cashier=self.cashier,
             completed_at=timezone.now(),
         )

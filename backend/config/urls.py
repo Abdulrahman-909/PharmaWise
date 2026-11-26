@@ -15,7 +15,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
+from apps.sales.checkout import checkout, checkout_options
+from apps.sales import counter, history
 from apps.sales.views import daily_sales_report
 from django.http import JsonResponse
 from apps.inventory.views import expiring_batches, medicine_batches, medicine_list
@@ -24,8 +26,18 @@ from apps.inventory.views import expiring_batches, medicine_batches, medicine_li
 def health_check(request):
     return JsonResponse({"status": "ok", "app": "PharmaWise"})
 urlpatterns = [
+    path("api/receipts/<int:pk>/repay/", counter.repay),
+    path("api/business-customers/", counter.business),
+    path("api/deliveries/", counter.deliveries),
+    path("api/receipts/", history.receipts),
+    path("api/receipts/<int:pk>/", history.receipt),
+    path("api/debtors/", history.debtors),
+    path("api/debtors/<int:pk>/", history.statement),
+    path("api/checkout/", checkout, name="checkout"),
+    path("api/checkout/options/", checkout_options, name="checkout-options"),
     path('admin/', admin.site.urls),
     path("api/health/", health_check),
+    path("api/auth/", include("apps.accounts.urls")),
     path("api/medicines/", medicine_list, name="medicine-list"),
     path(
         "api/medicines/<int:medicine_id>/batches/",

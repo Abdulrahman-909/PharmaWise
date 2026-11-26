@@ -2,9 +2,11 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+from apps.core.models import TenantModel
 
-class Medicine(models.Model):
-    sku = models.CharField("SKU", max_length=50, unique=True)
+
+class Medicine(TenantModel):
+    sku = models.CharField("SKU", max_length=50)
     generic_name = models.CharField(max_length=150)
     brand_name = models.CharField(max_length=150, blank=True)
     strength = models.CharField(max_length=80)
@@ -57,13 +59,19 @@ class Medicine(models.Model):
 
     class Meta:
         ordering = ["generic_name", "strength", "sku"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "sku"],
+                name="unique_sku_per_organization",
+            ),
+        ]
 
     def __str__(self):
         name = self.brand_name or self.generic_name
         return f"{name} {self.strength} ({self.dosage_form}) [{self.sku}]"
 
 
-class StockBatch(models.Model):
+class StockBatch(TenantModel):
     medicine = models.ForeignKey(
         Medicine,
         on_delete=models.PROTECT,
@@ -86,7 +94,7 @@ class StockBatch(models.Model):
         return f"{self.medicine.sku} — {self.batch_number}"
 
 
-class Supplier(models.Model):
+class Supplier(TenantModel):
     name = models.CharField(max_length=150)
     phone = models.CharField(max_length=50, blank=True)
     is_active = models.BooleanField(default=True)
@@ -98,7 +106,7 @@ class Supplier(models.Model):
         return self.name
 
 
-class PurchaseReceipt(models.Model):
+class PurchaseReceipt(TenantModel):
     supplier = models.ForeignKey(
         Supplier,
         on_delete=models.PROTECT,

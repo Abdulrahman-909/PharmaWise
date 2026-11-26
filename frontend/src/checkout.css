@@ -1,0 +1,13 @@
+nav[aria-label="Workspace"] { display: flex; justify-content: center; gap: .6rem; margin: 1rem; }
+nav[aria-label="Workspace"] button[aria-pressed="true"], .cashier button[type="submit"] { background: #17634f; color: white; }
+.cashier { text-align: left; max-width: 52rem; margin: 1.5rem auto; padding: 0 1rem; }
+.cashier fieldset { border: 0; margin: 0; padding: 0; }
+.cashier input, .cashier select, .cashier button, nav[aria-label="Workspace"] button { font: inherit; padding: .35rem .65rem; border: 1px solid var(--border); border-radius: .3rem; }
+.cashier label { display: inline-grid; gap: .2rem; margin: .5rem .6rem .5rem 0; }
+.cashier button, nav button { cursor: pointer; }
+.cashier button:disabled { cursor: default; opacity: .6; }
+.cashier .items { max-height: 16rem; overflow: auto; }
+.cashier .items > div, .cashier .cart-line { border-bottom: 1px solid var(--border); padding: .5rem 0; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.cashier .cart-line input { width: 6rem; }
+.cashier .receipt { border: 1px solid var(--border); padding: 1rem; margin: 1rem 0; }
+.cashier button[type="submit"] { margin: .6rem 0; }

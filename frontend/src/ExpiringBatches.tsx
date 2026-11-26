@@ -1,3 +1,4 @@
+import { t } from './language'
 import { useEffect, useState } from 'react'
 
 type ExpiringBatch = {
@@ -51,20 +52,20 @@ export default function ExpiringBatches() {
 
   return (
     <section aria-labelledby="expiry-report-heading">
-      <h2 id="expiry-report-heading">Batches expiring within 30 days</h2>
+      <h2 id="expiry-report-heading">{t("Batches expiring within 30 days")}</h2>
 
-      {message && <p role="status">{message}</p>}
+      {message && <p role="status">{t(message)}</p>}
 
       {batches.length > 0 && (
         <table>
           <thead>
             <tr>
-              <th scope="col">SKU</th>
-              <th scope="col">Generic name</th>
-              <th scope="col">Batch number</th>
-              <th scope="col">Expiry date</th>
-              <th scope="col">Quantity</th>
-              <th scope="col">Stock unit</th>
+              <th scope="col">{t("SKU")}</th>
+              <th scope="col">{t("Generic name")}</th>
+              <th scope="col">{t("Batch number")}</th>
+              <th scope="col">{t("Expiry date")}</th>
+              <th scope="col">{t("Quantity")}</th>
+              <th scope="col">{t("Stock unit")}</th>
             </tr>
           </thead>
           <tbody>
@@ -75,7 +76,7 @@ export default function ExpiringBatches() {
                 <td>{batch.batch_number}</td>
                 <td>{batch.expiry_date}</td>
                 <td>{batch.quantity_on_hand}</td>
-                <td>{batch.medicine__stock_unit || '—'}</td>
+                <td>{t(batch.medicine__stock_unit) || '—'}</td>
               </tr>
             ))}
           </tbody>

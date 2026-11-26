@@ -4,8 +4,10 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from apps.core.models import TenantModel
 
-class Sale(models.Model):
+
+class Sale(TenantModel):
     customer = models.ForeignKey(
         "Customer",
         on_delete=models.PROTECT,
@@ -160,7 +162,8 @@ class SaleAllocationCost(models.Model):
         return self.purchase_price_per_box * self.quantity / self.units_per_box
 
 
-class Customer(models.Model):
+class Customer(TenantModel):
+    is_business = models.BooleanField(default=False)
     name = models.CharField("Customer name", max_length=150)
     phone = models.CharField("Phone number", max_length=30, db_index=True)
 
@@ -171,7 +174,9 @@ class Customer(models.Model):
         return f"{self.name} — {self.phone}"
 
 
-class Payment(models.Model):
+class Payment(TenantModel):
+    repayment_key = models.UUIDField(unique=True, null=True, editable=False)
+    balance_after = models.DecimalField(max_digits=24, decimal_places=2, null=True, editable=False)
     sale = models.ForeignKey(
         Sale,
         on_delete=models.PROTECT,
@@ -199,11 +204,16 @@ class Payment(models.Model):
             ),
         ]
 
+    def save(self, *args, **kwargs):
+        if not self.organization_id:
+            self.organization_id = self.sale.organization_id
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Payment for sale #{self.sale_id}: {self.amount} AFN"
 
 
-class PaymentCorrection(models.Model):
+class PaymentCorrection(TenantModel):
     payment = models.ForeignKey(
         Payment,
         on_delete=models.PROTECT,
@@ -232,9 +242,15 @@ class PaymentCorrection(models.Model):
             ),
         ]
 
+    def save(self, *args, **kwargs):
+        if not self.organization_id:
+            self.organization_id = self.payment.organization_id
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Correction of {self.amount} AFN for payment #{self.payment_id}"
-class SaleReturn(models.Model):
+
+class SaleReturn(TenantModel):
     sale = models.ForeignKey(
         Sale,
         on_delete=models.PROTECT,
@@ -256,6 +272,11 @@ class SaleReturn(models.Model):
     @property
     def status(self):
         return "Posted" if self.posted_at else "Draft"
+
+    def save(self, *args, **kwargs):
+        if not self.organization_id:
+            self.organization_id = self.sale.organization_id
+        super().save(*args, **kwargs)
 
     def __str__(self):
         if self.pk is None:
@@ -324,3 +345,11 @@ class SaleReturnLine(models.Model):
         if self.pk is None:
             return "New return line"
         return f"Return #{self.sale_return_id} — {self.quantity} stock units"
+
+class CheckoutRecord(models.Model):
+    """A committed checkout and its receipt, keyed by the cashier's request."""
+    key = models.UUIDField(primary_key=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT)
+    cashier = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    request_data = models.JSONField()
+    receipt = models.JSONField(default=dict)

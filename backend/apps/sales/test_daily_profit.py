@@ -1,7 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -14,21 +13,21 @@ from apps.inventory.models import (
     Supplier,
 )
 
+from apps.core.testing import make_org, make_user
+
 from .models import Sale, SaleLine
 from .services import complete_sale
 
 
 class DailyProfitTest(TestCase):
     def setUp(self):
-        user_model = get_user_model()
-        self.cashier = user_model.objects.create(
-            **{user_model.USERNAME_FIELD: "testcashier@example.com"},
-            is_staff=True,
-        )
+        self.org = make_org()
+        self.cashier = make_user(self.org, role="admin")
         self.client = APIClient()
         self.client.force_authenticate(user=self.cashier)
 
         self.medicine = Medicine.objects.create(
+            organization=self.org,
             sku="TEST-PROFIT",
             generic_name="Test medicine",
             strength="500 mg",
@@ -42,13 +41,15 @@ class DailyProfitTest(TestCase):
         delivered_strips = boxes * strips_per_box
 
         batch = StockBatch.objects.create(
+            organization=self.org,
             medicine=self.medicine,
             batch_number="TEST-BATCH",
             expiry_date=timezone.localdate() + timedelta(days=365),
             quantity_on_hand=older_strips + delivered_strips,
         )
         receipt = PurchaseReceipt.objects.create(
-            supplier=Supplier.objects.create(name="Test supplier"),
+            organization=self.org,
+            supplier=Supplier.objects.create(organization=self.org, name="Test supplier"),
             invoice_number="TEST-RECEIPT",
             posted_at=timezone.now(),
         )
@@ -86,7 +87,7 @@ class DailyProfitTest(TestCase):
 
     def test_profit_when_every_sold_strip_has_a_known_cost(self):
         self.create_posted_delivery(boxes=1)
-        sale = Sale.objects.create(cashier=self.cashier)
+        sale = Sale.objects.create(organization=self.org, cashier=self.cashier)
         self.add_strips_to_sale(sale, quantity=2)
 
         complete_sale(sale.pk)
@@ -100,6 +101,7 @@ class DailyProfitTest(TestCase):
     def test_older_sale_with_unknown_cost_has_no_gross_profit(self):
         # A historical sale completed before delivery-cost tracking existed.
         sale = Sale.objects.create(
+            organization=self.org,
             cashier=self.cashier,
             completed_at=timezone.now(),
         )
@@ -113,7 +115,7 @@ class DailyProfitTest(TestCase):
 
     def test_sale_uses_older_strips_before_priced_delivery(self):
         batch, delivery = self.create_posted_delivery(boxes=2, older_strips=5)
-        sale = Sale.objects.create(cashier=self.cashier)
+        sale = Sale.objects.create(organization=self.org, cashier=self.cashier)
         line = self.add_strips_to_sale(sale, quantity=7)
 
         complete_sale(sale.pk)

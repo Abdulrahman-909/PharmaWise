@@ -104,12 +104,19 @@ def complete_sale(sale_id):
     if not lines:
         raise ValidationError("Add at least one medicine before completing the sale.")
 
+    for line in lines:
+        if line.medicine.organization_id != sale.organization_id:
+            raise ValidationError(
+                f"{line.medicine.sku} belongs to a different organization."
+            )
+
     medicine_ids = {line.medicine_id for line in lines}
 
     # Concurrent checkouts acquire batch locks in the same order.
     batches = list(
         StockBatch.objects.select_for_update()
         .filter(
+            organization_id=sale.organization_id,
             medicine_id__in=medicine_ids,
             quantity_on_hand__gt=0,
             expiry_date__gte=timezone.localdate(),

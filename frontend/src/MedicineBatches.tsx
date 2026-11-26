@@ -1,3 +1,4 @@
+import { t } from './language'
 import { useEffect, useState } from 'react'
 
 type Batch = {
@@ -49,15 +50,15 @@ function BatchList({ medicineId, stockUnit }: MedicineBatchesProps) {
     return () => controller.abort()
   }, [medicineId])
 
-  if (message) return <p role="status">{message}</p>
+  if (message) return <p role="status">{t(message)}</p>
 
   return (
     <table aria-label="Stock batches">
       <thead>
         <tr>
-          <th scope="col">Batch number</th>
-          <th scope="col">Expiry date</th>
-          <th scope="col">{stockUnit ? `Quantity (${stockUnit})` : 'Quantity'}</th>
+          <th scope="col">{t("Batch number")}</th>
+          <th scope="col">{t("Expiry date")}</th>
+          <th scope="col">{stockUnit ? `${t('Quantity')} (${t(stockUnit)})` : t("Quantity")}</th>
         </tr>
       </thead>
       <tbody>
@@ -83,7 +84,7 @@ export default function MedicineBatches({ medicineId, stockUnit }: MedicineBatch
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
       >
-        {isOpen ? 'Hide batches' : 'View batches'}
+        {isOpen ? t("Hide batches") : t("View batches")}
       </button>
       {isOpen && <BatchList medicineId={medicineId} stockUnit={stockUnit} />}
     </>

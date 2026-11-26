@@ -7,6 +7,8 @@ from django.db import transaction
 from django.db.models import Sum
 from django.forms.models import BaseInlineFormSet
 
+from apps.core.admin import TenantAdminMixin, TenantInlineMixin
+
 from .models import (
     Customer,
     Payment,
@@ -89,7 +91,7 @@ class SaleLineForm(forms.ModelForm):
         return data
 
 
-class SaleLineInline(admin.StackedInline):
+class SaleLineInline(TenantInlineMixin, admin.StackedInline):
     model = SaleLine
     form = SaleLineForm
     extra = 0
@@ -106,7 +108,7 @@ class SaleLineInline(admin.StackedInline):
 
 
 @admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):
+class CustomerAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("name", "phone")
     search_fields = ("name", "phone")
     readonly_fields = ("outstanding_balance_afn",)
@@ -132,7 +134,7 @@ class CustomerAdmin(admin.ModelAdmin):
 
 
 @admin.register(Sale)
-class SaleAdmin(admin.ModelAdmin):
+class SaleAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = (
         "id",
         "customer",
@@ -271,7 +273,7 @@ class PaymentForm(forms.ModelForm):
 
 
 @admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
+class PaymentAdmin(TenantAdminMixin, admin.ModelAdmin):
     form = PaymentForm
     fields = ("sale", "amount", "received_by", "received_at")
     readonly_fields = ("received_by", "received_at")
@@ -279,7 +281,11 @@ class PaymentAdmin(admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "sale":
-            kwargs["queryset"] = Sale.objects.filter(completed_at__isnull=False)
+            organization = getattr(request.user, "organization", None)
+            sales = Sale.objects.all()
+            if organization is not None or not request.user.is_superuser:
+                sales = sales.for_organization(organization)
+            kwargs["queryset"] = sales.filter(completed_at__isnull=False)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     @transaction.atomic
@@ -328,7 +334,7 @@ class PaymentCorrectionForm(forms.ModelForm):
 
 
 @admin.register(PaymentCorrection)
-class PaymentCorrectionAdmin(admin.ModelAdmin):
+class PaymentCorrectionAdmin(TenantAdminMixin, admin.ModelAdmin):
     form = PaymentCorrectionForm
     fields = ("payment", "amount", "reason", "corrected_by", "corrected_at")
     readonly_fields = ("corrected_by", "corrected_at")
@@ -359,7 +365,7 @@ class SaleReturnLineFormSet(BaseInlineFormSet):
             ).order_by("pk")
 
 
-class SaleReturnLineInline(admin.TabularInline):
+class SaleReturnLineInline(TenantInlineMixin, admin.TabularInline):
     model = SaleReturnLine
     formset = SaleReturnLineFormSet
     fields = ("sale_line", "quantity")
@@ -382,7 +388,7 @@ class SaleReturnLineInline(admin.TabularInline):
 
 
 @admin.register(SaleReturn)
-class SaleReturnAdmin(admin.ModelAdmin):
+class SaleReturnAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = (
         "id",
         "sale",

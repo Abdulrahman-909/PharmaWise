@@ -3,11 +3,13 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.core.admin import TenantAdminMixin, TenantInlineMixin
+
 from .models import Medicine, PurchaseReceipt, PurchaseReceiptLine, StockBatch, Supplier
 
 
 @admin.register(Medicine)
-class MedicineAdmin(admin.ModelAdmin):
+class MedicineAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = (
         "sku",
         "generic_name",
@@ -21,20 +23,20 @@ class MedicineAdmin(admin.ModelAdmin):
 
 
 @admin.register(StockBatch)
-class StockBatchAdmin(admin.ModelAdmin):
+class StockBatchAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("batch_number", "medicine", "expiry_date", "quantity_on_hand")
     search_fields = ("batch_number", "medicine__sku", "medicine__generic_name")
     ordering = ("expiry_date", "batch_number")
 
 
 @admin.register(Supplier)
-class SupplierAdmin(admin.ModelAdmin):
+class SupplierAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("name", "phone", "is_active")
     search_fields = ("name", "phone")
     list_filter = ("is_active",)
 
 
-class PurchaseReceiptLineInline(admin.TabularInline):
+class PurchaseReceiptLineInline(TenantInlineMixin, admin.TabularInline):
     model = PurchaseReceiptLine
     extra = 0
     fields = (
@@ -63,7 +65,7 @@ class PurchaseReceiptLineInline(admin.TabularInline):
 
 
 @admin.register(PurchaseReceipt)
-class PurchaseReceiptAdmin(admin.ModelAdmin):
+class PurchaseReceiptAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("invoice_number", "supplier", "received_on", "posted_at")
     search_fields = ("invoice_number", "supplier__name")
     list_filter = ("received_on",)
@@ -119,7 +121,14 @@ class PurchaseReceiptAdmin(admin.ModelAdmin):
                 self.message_user(request, "Receipt is already posted.", messages.WARNING)
                 return
 
-            lines = list(receipt.lines.order_by("batch_id", "pk"))
+            lines = list(receipt.lines.select_related("batch").order_by("batch_id", "pk"))
+            if any(l.batch.organization_id != receipt.organization_id for l in lines):
+                self.message_user(
+                    request,
+                    "A delivery line uses a batch from another organization.",
+                    messages.ERROR,
+                )
+                return
             if not lines:
                 self.message_user(
                     request,
